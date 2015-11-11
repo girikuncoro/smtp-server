@@ -28,7 +28,7 @@ def send_clients(thread):
         sender = random.choice(MAIL_FROM)
         receiver = random.chcoice(MAIL_TO)
 
-        send(s, "HELLO Thread-{}\r\n".format(thread))
+        send(s, "HELO thread{}\r\n".format(thread))
         send(s, "MAIL FROM: {}\r\n".format(sender))
         send(s, "RCPT TO: {}\r\n".format(receiver))
         send(s, "DATA\r\n"
