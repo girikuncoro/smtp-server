@@ -1,0 +1,80 @@
+NETID:  <your netid here>
+
+Describe the contents of an IP packet and for each field describe the purpose it serves.
+
+    <your answer>
+
+Describe the general operation of the BGP protocol.
+
+    <your answer>
+
+Describe why the ethernet protocol necessitates a minimum packet size.
+
+    <your answer>
+
+Describe how TCP reacts to congestion in the network.  Assume that
+congestion is brought on by BGP reconfiguring the path such that TCP
+packets now go through a bottleneck link of capacity B packets/second.
+Describe in detail what TCP will do when faced with this bottleneck.
+
+    <your answer>
+
+Describe TCP's behavior when it is first getting started delivering data
+over a high latency, high-bandwidth channel such as a satellite link. Be
+sure to explain how TCP manages its window size during the initial
+connection setup.
+
+    <your answer>
+
+On an ethernet segment, the ARP protocol is used to locate the ethernet
+address of a host whose IP address is known. On the Internet, DNS is
+used to locate the IP address of a host whose name is known. ARP and
+DNS are drastically different -- the former uses a broadcast mechanism
+while the latter implements a scalable, distributed database. Explain
+why DNS was designed the way it was, and not, for instance, based on
+a simple broadcast.
+
+    <your answer>
+
+Describe the two means by which a DNS name, such as www.cnn.com, is
+resolved.
+
+    <your answer>
+
+What is a DNS local resolver?
+
+    <your answer>
+
+What purpose does the ACK # serve in TCP?
+
+    <your answer>
+
+What purpose does the destination port number serve in UDP?
+
+    <your answer>
+
+Why does UDP include a checksum? Wouldn't the end-to-end argument
+require that all checksums be performed at the application level, and
+hence argue that UDP and TCP elide such additional checksums in the
+network stack?
+
+    <your answer>
+
+Imagine that a mail server on host A has just received a TCP/IP SYN
+packet destined for it. Describe everything that happens to this packet
+from the point of its reception by the network interface card to the
+point of its delivery to the mail server.
+
+    <your answer>
+
+ 
+
+In IPv6, why do routers not fragment packets? Then how does IPv6 deal with the issue
+of Minimum Transmission Unit (MTU)?
+
+    <your answer>
+
+What is the difference between a web proxy and a vpn? When would it be advantageous 
+to use a proxy instead of a vpn?
+
+    <your answer>
