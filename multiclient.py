@@ -3,6 +3,7 @@ import socket  # provide access to BSD socket interface
 from threading import Thread
 import random
 import datetime
+import time
 
 # This is the multi-threaded client.  This program should be able to run
 # with no arguments and should connect to "127.0.0.1" on port 8765.  It
@@ -15,7 +16,7 @@ MAIL_FROM = ["ellon@tesla.com", "marissa@yahoo-inc.com", "mark@facebook.com"]
 MAIL_TO = ["larry@google.com", "steve@apple.com", "bill@microsoft.com"]
 RUN_FOREVER = True
 
-def send():
+def send(socket, message):
     # must convert message to bytes explicitly in Python 3
     socket.send(message.encode('utf-8'))
 
