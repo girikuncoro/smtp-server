@@ -3,6 +3,7 @@ import getopt
 import socket
 import sys
 import re
+from shutil import copy  # to copy files in backup
 from threading import Thread, Lock, Condition
 
 # Don't change 'host' and 'port' values below.  If you do, we will not be able to contact
@@ -12,14 +13,13 @@ from threading import Thread, Lock, Condition
 host = "127.0.0.1"
 port = 8765
 
-MAX_THREAD = 32
-
 # error messages to be sent in certain conditions
 ERROR = {
     "unrecognized": "500 Error: command not recognized",
     "syntax_helo": "501 Syntax: HELO yourhostname",
     "syntax_from": "501 Syntax: MAIL FROM: you@domain.com",
     "syntax_to": "501 Syntax: RCPT TO: sendto@domain.com",
+    "syntax_data": "501 Syntax: DATA <CR><LF> message <CR><LF>.<CR><LF>",
     "order": "503 Error: need {} command",
     "duplicate_helo": "503 Error: duplicate HELO",
     "nested_mail": "503 Error: nested MAIL command",
@@ -30,7 +30,7 @@ ERROR = {
 
 # ok message to be sent depending on state
 OK = {
-    "INIT": "220 gk256 SMTP CS4410MP3"
+    "INIT": "220 gk256 SMTP CS4410MP3",
     "HELO": "250 gk256",
     "MAIL": "250 OK",
     "RCPT": "250 OK",
@@ -41,11 +41,14 @@ OK = {
 FINISH = "FIN"
 
 # handle a single client request
-class ConnectionHandler:
-    def __init__(self, socket):
-        self.TIMEOUT = 10
+class ConnectionHandler(Thread):
+    def __init__(self, thread_pool):
+        Thread.__init__(self)
+        self.pool = thread_pool
+        self.mailbox_lock = Lock()
 
-        self.socket = socket
+        self.TIMEOUT = 30
+
         self.s_pointer = 0  # state pointer
         self.states = ["INIT", "HELO", "MAIL", "RCPT", "DATA", "FIN"]
 
@@ -61,43 +64,49 @@ class ConnectionHandler:
         self.send_ok("INIT")
         # print "Connect to {}".format(self.address)
         while self.states[self.s_pointer] != FINISH:
-            parse_buffer(self.socket.recv(500))
+            self.parse_buffer(self.socket.recv(500))
         self.socket.close()
 
     def parse_buffer(self, messages):
         args = messages.split("\r\n")
-        self.head_msg = args[0]
-        self.tail_msg = args[1:-1]
+        head_msg = args[0]
+        tail_msg = args[1:-1]
 
         self.parse(head_msg)
 
         # ****TODO*****
         # self.parse_msg something
 
-        for m in self.tail_msg:
+        for m in tail_msg:
             self.parse(m)
 
     def parse(self, msg):
-        cmd = msg[:4].upper()
+        args = msg.split()
+        cmd = args[0].upper() if len(args) > 0 else ""
+        tail = args[1].upper() if len(args) > 1 else ""
+
+        input_cmd = " ".join([cmd, tail]).strip() if cmd in ["MAIL", "RCPT"] \
+                                                  else cmd
+
+        cmd_list = ["HELO", "MAIL FROM:", "RCPT TO:", "DATA"]
         valid_cmd = False
 
-        if self.curr_state("INIT") and cmd == "HELO":
+        if self.curr_state("INIT") and input_cmd == "HELO":
             self.handle_helo(msg)
             valid_cmd = True
 
-        if self.curr_state("HELO") and cmd == "MAIL":
+        if self.curr_state("HELO") and input_cmd == "MAIL FROM:":
             self.handle_mail(msg)
             valid_cmd = True
 
-        if self.curr_state("MAIL") and cmd == "RCPT":
+        if self.curr_state("MAIL") and input_cmd == "RCPT TO:":
+            self.handle_rcpt(msg)
+            valid_cmd = True
+        elif self.curr_state("RCPT") and input_cmd == "RCPT TO:":
             self.handle_rcpt(msg)
             valid_cmd = True
 
-        if self.curr_state("RCPT") and cmd == "RCPT":
-            self.handle_rcpt(msg)
-            valid_cmd = True
-
-        if self.curr_state("RCPT") and cmd == "DATA":
+        if self.curr_state("RCPT") and input_cmd == "DATA":
             self.handle_data(msg)
             valid_cmd = True
 
@@ -107,28 +116,27 @@ class ConnectionHandler:
 
         if self.curr_state("DATA") and msg == ".":
             self.send_ok("FIN")
-            #*** TODO****
-            # do backup here
+            self.process_mailbox()
             self.next_mail()
             valid_cmd = True
 
         if not valid_cmd:
-            if self.curr_state("HELO") and cmd == "HELO":
-                self.send_error(ERROR["duplicate_helo"])
-            elif self.curr_state("MAIL") and cmd == "MAIL":
-                self.send_error(ERROR["nested_mail"])
-            elif cmd in self.states:
-                self.send_error(ERROR["order"])
+            if self.curr_state("HELO") and input_cmd == "HELO":
+                self.send_error("duplicate_helo")
+            elif self.curr_state("MAIL") and input_cmd == "MAIL FROM:":
+                self.send_error("nested_mail")
+            elif input_cmd in cmd_list:
+                self.send_error("order")
             else:
-                self.send_error(ERROR["unrecognized"])
+                self.send_error("unrecognized")
 
     # handle HELO command
     def handle_helo(self, msg):
         args = msg.strip().split(" ")
-        if len(args) > 2:
-            self.send_error(ERROR["syntax_helo"])
+        if len(args) != 2:
+            self.send_error("syntax_helo")
         else:
-            self.client_name = args[1]
+            self.client_name = args[1] if len(args) > 1 else ""
             self.send_ok("HELO")
 
     # handle MAIL FROM command
@@ -136,46 +144,47 @@ class ConnectionHandler:
         args = msg.strip().split(" ")
         valid_syntax = False
 
-        if len(args) > 2 and args[0] == "MAIL" and args[1] == "FROM:":
+        if len(args) == 3 and \
+            args[0].upper() == "MAIL" and args[1].upper() == "FROM:":
             valid_syntax = True
 
-        if valid_syntax and valid_mail(args[2]):
+        if valid_syntax and self.valid_mail(args[2]):
             self.from_mail = args[2]
             self.send_ok("MAIL")
 
-        if valid_syntax and not valid_mail(args[2]):
+        if valid_syntax and not self.valid_mail(args[2]):
             self.from_mail = "".join(args[2:])
-            self.send_error(ERROR["sender"])
+            self.send_error("sender")
 
         if not valid_syntax:
-            self.send_error(ERROR["syntax_from"])
+            self.send_error("syntax_from")
 
     # handle RCPT TO command
     def handle_rcpt(self, msg):
         args = msg.strip().split(" ")
         valid_syntax = False
 
-        if len(args) > 2 and args[0] == "RCPT" and args[1] == "TO:":
+        if len(args) == 3 and \
+            args[0].upper() == "RCPT" and args[1].upper() == "TO:":
             valid_syntax = True
 
-        if valid_syntax and valid_mail(args[2]):
+        if valid_syntax and self.valid_mail(args[2]):
             self.to_mails.append(args[2])
-            sel.send_ok("RCPT")
+            self.send_ok("RCPT")
 
-        if valid_syntax and not valid_mail(args[2]):
+        if valid_syntax and not self.valid_mail(args[2]):
             self.to_mails.append("".join(args[2:]))
-            self.send_error(ERROR["recipient"])
+            self.send_error("recipient")
 
         if not valid_syntax:
-            self.send_error(ERROR["syntax_to"])
+            self.send_error("syntax_to")
 
-    # ****** RECHECK,, TODO*****
     # handle DATA command
     def handle_data(self, msg):
         # data is processed inside parse method, only send error/ok here
         # for the 'DATA' message
         if len(msg) != 4:
-            self.send_error()
+            self.send_error("syntax_data")
         else:
             self.send_ok("DATA")
 
@@ -184,20 +193,44 @@ class ConnectionHandler:
             return True
         return False
 
+    def process_mailbox(self):
+        with self.mailbox_lock:
+            self.mail_box = open("mailbox", "a+")
+            self.mail_box.write(self.format_text(self.text_body))
+            self.mail_box.close()
+
+            if self.count_msg > 0 and self.count_msg % 32 == 0:
+                backup = "mailbox.{}-{}".format(self.text_body-32,
+                                                     self.text_body)
+                copy("mailbox", backup)
+                self.mail_box = open("mailbox", "w+")
+                self.mail_box.close()
+
     def next_mail(self):
         self.s_pointer = self.states.index("HELO")
         self.text_body = ""
         self.from_mail = ""
         self.to_mails = []
 
-    def format_text(self):
-        pass
+    def format_text(self, raw_text):
+        # for formatting the backup/mailbox
+        formatted = "Received: from {} by gk256 (CS4410MP3)\n"\
+                    "Number: {}\n"\
+                    "From: {}\n".format(self.client_name,
+                                        self.count_msg,
+                                        self.from_mail)
+        for m in self.to_mails:
+            formatted += "To: {}\n".format(m)
+        formatted += "\n{}\n".format(raw_text)
+        return formatted
 
     def send_ok(self, curr):
         if curr == FINISH:
             self.count_msg += 1
+            self.s_pointer = len(self.states)-1
+            msg = "250 OK: Delivered {} messages".format(self.count_msg)
 
-        if curr in self.states[:-1]:
+        elif curr in self.states[:-1]:
             self.s_pointer = self.states.index(curr)
             msg = OK[curr]
         else:
@@ -209,27 +242,40 @@ class ConnectionHandler:
 
     def send_error(self, etype):
         REQUIRE_ARGS = ["order", "sender", "recipient"]
+        valid_etype = True
 
         if etype not in ERROR:
             msg = "Error type not recognized"
+            valid_etype = False
 
-        if etype not in REQUIRE_ARGS:
-            msg = ERROR[etype]
-
-        if etype == REQUIRE_ARGS[0]:
-            msg = ERROR[etype].format(self.states[self.curr_state+1])
-        if etype == REQUIRE_ARGS[1]:
-            msg = ERROR[etype].format(self.from_mail)
-        if etype == REQUIRE_ARGS[2]:
-            msg = ERROR[etype].format(self.to_mails.pop())
+        if valid_etype:
+            if etype not in REQUIRE_ARGS:
+                msg = ERROR[etype]
+            if etype == REQUIRE_ARGS[0]:
+                msg = ERROR[etype].format(self.states[self.s_pointer+1])
+            if etype == REQUIRE_ARGS[1]:
+                msg = ERROR[etype].format(self.from_mail)
+            if etype == REQUIRE_ARGS[2]:
+                msg = ERROR[etype].format(self.to_mails.pop())
 
         # error command will set the new timeout
-        self.socket.settimeout(self.socket.gettimeout()/2)
+        # self.socket.settimeout(self.socket.gettimeout()/2)
         self.socket.send(msg)
 
     # http://stackoverflow.com/questions/8022530/python-check-for-valid-email-address
     def valid_mail(self, email):
         return not not re.match("[^@]+@[^@]+\.[^@]+", email)
+
+    def run(self):
+        # producer
+        while True:
+            try:
+                self.socket = self.pool.get_connection()
+                self.handle()
+            except socket.timeout:
+                self.send_error("timeout")
+                self.socket.close()
+
 
 # thread pool
 class ThreadPool:
@@ -249,18 +295,17 @@ class ThreadPool:
                 self.conn_available.wait()
             self.conn_pool.append(socket)
             self.n_connected += 1
-            self.request_available.notify_all()
+            self.request_available.notifyAll()
 
     # consumer
-    def wait_for_connection(self):
+    def get_connection(self):
         with self.pool_lock:
-            while self.request_available == 0:
+            while self.n_connected == 0:
                 self.request_available.wait()
             socket = self.conn_pool.pop()
             self.n_connected -= 1
-            self.conn_avail.notify_all()
+            self.conn_available.notifyAll()
             return socket
-
 
 # the main server loop
 def serverloop():
@@ -282,8 +327,7 @@ def serverloop():
     while True:
         # accept a connection
         (clientsocket, address) = serversocket.accept()
-        ct = ConnectionHandler(clientsocket)
-        ct.handle()
+        pool.connection_ready(clientsocket)
 
 # You don't have to change below this line.  You can pass command-line arguments
 # -h/--host [IP] -p/--port [PORT] to put your server on a different IP/port.

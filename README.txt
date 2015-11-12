@@ -234,7 +234,7 @@ Here are some things you should keep in mind as you build your SMTP server:
    CSUGLab machines and spawn your server on a port that is known to both you
    and others.  At no time should you be in possesion of, or have access to,
    the source code of another student.
-   
+
 Mailbox Backup
 ------------
 
