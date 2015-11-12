@@ -2,7 +2,8 @@
 import getopt
 import socket
 import sys
-from threading import Thread
+import re
+from threading import Thread, Lock, Condition
 
 # Don't change 'host' and 'port' values below.  If you do, we will not be able to contact
 # your server when grading.  Instead, you should provide command-line arguments to this
@@ -11,6 +12,7 @@ from threading import Thread
 host = "127.0.0.1"
 port = 8765
 
+MAX_THREAD = 32
 
 # error messages to be sent in certain conditions
 ERROR = {
@@ -171,6 +173,7 @@ class ConnectionHandler:
     # handle DATA command
     def handle_data(self, msg):
         # data is processed inside parse method, only send error/ok here
+        # for the 'DATA' message
         if len(msg) != 4:
             self.send_error()
         else:
@@ -224,32 +227,46 @@ class ConnectionHandler:
         self.socket.settimeout(self.socket.gettimeout()/2)
         self.socket.send(msg)
 
-    def valid_mail(self):
-        pass
+    # http://stackoverflow.com/questions/8022530/python-check-for-valid-email-address
+    def valid_mail(self, email):
+        return not not re.match("[^@]+@[^@]+\.[^@]+", email)
 
 # thread pool
 class ThreadPool:
-    def __init__(self):
-        pass
+    def __init__(self, n_threads):
+        self.pool_lock = Lock()
+        self.conn_available = Condition(self.pool_lock)
+        self.request_available = Condition(self.pool_lock)
 
-    def start_mailer():
-        pass
+        self.conn_pool = []  # thread pool
+        self.n_connected = 0
+        self.max_conn = n_threads
 
-    def finish_mailer():
-        pass
+    # producer
+    def connection_ready(self, socket):
+        with self.pool_lock:
+            while self.n_connected >= self.max_conn:
+                self.conn_available.wait()
+            self.conn_pool.append(socket)
+            self.n_connected += 1
+            self.request_available.notify_all()
 
-
-# postman for each thread in the pool
-class Mailer(Thread):
-    def __init__(self):
-        pass
-
-    def run():
-        pass
+    # consumer
+    def wait_for_connection(self):
+        with self.pool_lock:
+            while self.request_available == 0:
+                self.request_available.wait()
+            socket = self.conn_pool.pop()
+            self.n_connected -= 1
+            self.conn_avail.notify_all()
+            return socket
 
 
 # the main server loop
 def serverloop():
+    # init thread pool
+    pool = ThreadPool(32)
+
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # mark the socket so we can rebind quickly to this port number
     # after the socket is closed
@@ -258,6 +275,9 @@ def serverloop():
     serversocket.bind((host, port))
     # start listening with a backlog of 5 connections
     serversocket.listen(5)
+
+    for _ in range(32):
+        ConnectionHandler(pool).start()
 
     while True:
         # accept a connection
