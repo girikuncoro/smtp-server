@@ -1,4 +1,4 @@
-NETID:  <your netid here>
+NETID:  gk256
 
 Describe the contents of an IP packet and for each field describe the purpose it serves.
 
@@ -67,14 +67,14 @@ point of its delivery to the mail server.
 
     <your answer>
 
- 
+
 
 In IPv6, why do routers not fragment packets? Then how does IPv6 deal with the issue
 of Minimum Transmission Unit (MTU)?
 
     <your answer>
 
-What is the difference between a web proxy and a vpn? When would it be advantageous 
+What is the difference between a web proxy and a vpn? When would it be advantageous
 to use a proxy instead of a vpn?
 
     <your answer>
