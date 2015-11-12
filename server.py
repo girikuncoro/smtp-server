@@ -45,18 +45,26 @@ ERROR = {
 
 # ok message to be sent depending on state
 OK = {
+    "INIT": "220 gk256 SMTP CS4410MP3"
     "HELO": "250 gk256",
     "MAIL": "250 OK",
     "RCPT": "250 OK",
     "DATA": "354 End data with <CR><LF>.<CR><LF>",
-    "END": "220 gk256 SMTP CS4410MP3"
+    "FIN": "250 OK: Delivered {} messages"
 }
 
 # handle a single client request
 class ConnectionHandler:
     def __init__(self, socket):
+        self.TIMEOUT = 10
+
         self.socket = socket
-        self.scounter = 0
+        self.s_pointer = 0  # state pointer
+        self.states = ["INIT", "HELO", "MAIL", "RCPT", "DATA", "FIN"]
+        self.from_mail = ""
+        self.to_mails = []
+
+        self.count_msg = 0
 
     def handle(self):
         self.socket.close()
@@ -68,8 +76,21 @@ class ConnectionHandler:
     def parse_bulkmsg(self):
         pass
 
-    def send_ok(self, next):
-        pass
+    def send_ok(self, curr_state):
+        FINISH = "FIN"
+
+        if curr_state == FINISH:
+            self.count_msg += 1
+
+        if curr_state in self.states[:-1]:
+            self.s_pointer = self.states.index(curr_state)
+            msg = OK[curr_state]
+        else:
+            self.s_pointer = len(self.states)-1
+            msg = "State not recognized"
+
+        self.socket.send(msg)
+        self.socket.settimeout(self.TIMEOUT)  # valid commmand resets timeout
 
     def send_error(self, etype):
         REQUIRE_ARGS = ["order", "sender", "recipient"]
@@ -80,13 +101,13 @@ class ConnectionHandler:
         if etype not in REQUIRE_ARGS:
             msg = ERROR[etype]
         elif etype == REQUIRE_ARGS[0]:
-            msg = ERROR[etype].format(self.state[self.scounter+1])
+            msg = ERROR[etype].format(self.states[self.curr_state+1])
         elif etype == REQUIRE_ARGS[1]:
             msg = ERROR[etype].format(self.from_mail)
         elif etype == REQUIRE_ARGS[2]:
             msg = ERROR[etype].format(self.to_mails.pop())
 
-        # bad command will set the new timeout
+        # error command will set the new timeout
         self.socket.settimeout(self.socket.gettimeout()/2)
         self.socket.send(msg)
 
