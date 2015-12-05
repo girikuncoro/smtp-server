@@ -1,3 +1,5 @@
+(Note: there's a bug in my backup thread implementation which I was running out of time to fix it)
+
 CS4410 MP3:  SMTP Server
 ========================
 
