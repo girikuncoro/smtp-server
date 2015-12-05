@@ -1,30 +1,54 @@
 NETID:  gk256
 
-Describe the contents of an IP packet and for each field describe the purpose it serves.
+> Describe the contents of an IP packet and for each field describe the purpose it serves.
 
-    <your answer>
+    IP packets are composed of a header and payload (data). The typical of IPv4
+    packet header includes below contents:
+    - Version (4 bits): it specifies if the packet is IPv4 or IPv6
+    - Internet Header Length (4 bits): it specifies the length of the header multiplied
+        by 4 bytes. For example, 5 means 20 bytes
+    - Quality of Service (8 bits): this contains the type of service, which describes
+        priority of the packet should have.
+    - Length (16 bits): the total length of the packet in bytes
+    - Identification Tag (16 bits): it helps reconstruct the packet from several fragments
+    - 3 bits of Zero, DF, and MF: DF (Don't fragment) describes if the packet is allowed
+        to be fragmented or not, MF (More fragments) specifies if more fragments of a
+        packet follow
+    - Fragment offset (13 bits): Field to identify position of fragment within original
+        packet
+    - Time to live (8 bits): Number of hops the packet is allowed to pass before it dies
+        For example, packet with TTL 16 will be allowed to go accross 16 routers
+        to destination before it gets discarded
+    - Protocol (8 bits): this contains protocol that includes TCP, UDP, ICMP, etc
+    - Header checksum (16 bits): number used for error detection
+    - Source IP Address (32 bits): this allows the recipient to know the sender
+    - Destination address (32 bits): this directs the packet to reach the recipient
 
-Describe the general operation of the BGP protocol.
+> Describe the general operation of the BGP protocol.
 
-    <your answer>
+The BGP protocol connects autonomous systems(AS) using a network of connected gateway routers. All gateway routers are interconnected and they are also connected to a preconfigured list of gateway routers from other ASs. Routes are found along a path of gateway routers using the BGP routing algorithm. Each node keeps track of a list of other nodes and distance from those nodes and costs, which are calculated by the algorithm. This information is updated periodically. 
 
-Describe why the ethernet protocol necessitates a minimum packet size.
 
-    <your answer>
+> Describe why the ethernet protocol necessitates a minimum packet size.
 
-Describe how TCP reacts to congestion in the network.  Assume that
-congestion is brought on by BGP reconfiguring the path such that TCP
+A minimum packet size is needed for collision detection, called CSMA/CD (Carrier Sense Multiple Access with *Collision Detect*). The ethernet nodes must be transmitting long enough for the signal indicating the collision to be propagated back to the sending node. If the packet size is too small, the signal will never reach back to the sending node. 
+
+
+> Describe how TCP reacts to congestion in the network.  
+
+Assume that congestion is brought on by BGP reconfiguring the path such that TCP
 packets now go through a bottleneck link of capacity B packets/second.
 Describe in detail what TCP will do when faced with this bottleneck.
 
-    <your answer>
+TCP senders limit how much data they send out on the network based on a congestion window. The congestion window starts out as some small multiple of the MTU. For every packet that is successfully received and acknowledged by the receiver, the congestion window increases by a set constant value. When a packet is dropped, (signaling that there is a bottleneck), the congestion window is halved to allow network traffic to clear.   
 
-Describe TCP's behavior when it is first getting started delivering data
+
+> Describe TCP's behavior when it is first getting started delivering data
 over a high latency, high-bandwidth channel such as a satellite link. Be
 sure to explain how TCP manages its window size during the initial
 connection setup.
 
-    <your answer>
+Initially, the window size is set to 1 MSS. For each ACK, increment the window size by 1 MSS, which results in doubling the sending rate for each ACK. This is the slow start mode. The long delay in ACKing packet transmissions because of high latency causes congestion and problems with the congestion window algorithm. To fix this, the high latency node is spoofed with a lower latency proxy node which sends an ACK message back to the sender immediately before forwarding the message on to the high latency link. This is called TCP acceleration and brings the connection out of the slow start mode.
 
 On an ethernet segment, the ARP protocol is used to locate the ethernet
 address of a host whose IP address is known. On the Internet, DNS is
@@ -34,47 +58,54 @@ while the latter implements a scalable, distributed database. Explain
 why DNS was designed the way it was, and not, for instance, based on
 a simple broadcast.
 
-    <your answer>
+The number of hosts on the internet is far too large for a simple broadcast to be able to handle the traffic. The braodcasting and waiting time for a response from every node would take far too long. DNS solves this problem by distributing information about name-IP associations across many servers, each of which knows about some of the others. If a name-IP pair is not found on one DNS server, that server can forward the request to another DNS server which is more likely to have that information. 
+ARP can use a simple broadcast system because it assumes that the subnet is relatively small.
 
-Describe the two means by which a DNS name, such as www.cnn.com, is
+> Describe the two means by which a DNS name, such as www.cnn.com, is
 resolved.
 
-    <your answer>
+1) A client can sometimes answer a query locally using cached information obtained from a previous query. The DNS server can use its own cache of resource record information to answer a query. 
+2) A DNS server can also query or contact other DNS servers on behalf of the requesting client to fully resolve the name, then send an answer back to the client. This process is known as recursion.
 
-What is a DNS local resolver?
+> What is a DNS local resolver?
 
-    <your answer>
+A local DNS resolver is standard piece of software installed on the server performing DNS lookups that can lookup the Fully Qualified Domain Name (FQDN) for any IP address. When a webpage is requested, the DNS local resolver creates a DNS query and sends it to the name servers listed in the local computer's TCP/IP settings. 
 
-What purpose does the ACK # serve in TCP?
+> What purpose does the ACK # serve in TCP?
 
-    <your answer>
+The ACK # exists as a field in the TCP header. When the ACK flag is set, this field has a value which represents the next sequence number the receiver is expecting, which allows for acknowledgement of all prior bytes. 
 
-What purpose does the destination port number serve in UDP?
+> What purpose does the destination port number serve in UDP?
 
-    <your answer>
+This field identifies the receiver's port and is required. Similar to source port number, if the client is the destination host then the port number will likely be an ephemeral port number and if the destination host is the server then the port number will likely be a well-known port number.
 
-Why does UDP include a checksum? Wouldn't the end-to-end argument
+> Why does UDP include a checksum? Wouldn't the end-to-end argument
 require that all checksums be performed at the application level, and
 hence argue that UDP and TCP elide such additional checksums in the
 network stack?
 
-    <your answer>
+A checksum to verify that the end to end data has not been corrupted by routers or bridges in the network or by the processing in an end system. UDP is connectionless which means that it doesn't care about dropped packets and packets received out of order, so it must have this checksum in the network stack.
 
-Imagine that a mail server on host A has just received a TCP/IP SYN
+
+> Imagine that a mail server on host A has just received a TCP/IP SYN
 packet destined for it. Describe everything that happens to this packet
 from the point of its reception by the network interface card to the
 point of its delivery to the mail server.
 
-    <your answer>
+The physical network layer receives the packet and computes the CRC and sends it to link-layer. The link-layer verifies the CRC and strips the frame header and sends the IP datagram to network-layer. Next, the internet layer reads the fields of the IP header. If the datagram is identified, then the IP header is stripped off and the TCP packet is sent to the transport layer. The transport layer uses the destination port number in the TCP header to determine how the packet should be delivered. The TCP checksum is checked and the TCP header is stripped off and the payload data is sent to the mail server. 
+ 
+> In IPv6, why do routers not fragment packets? Then how does IPv6 deal with the issue
+of Maximum Transmission Unit (MTU)?
+
+Fragmentation can create security holes and buffering is needed to reassemble packets as the rest of the packets need to be waited on. Someone can send large numbers of unfinished IP fragments, which would use up resources. It is now the sending hosts' responsibility to fragment packets. They do this by performing path MTU discovery. This is a trial and error process in which the sending host first tries to send IPv6 datagrams at the link MTU of the interface on which the traffic is being forwarded. If packet is too large for the router on the path to forward, then the router sends an ICMPv6 Packet Too Big message back to the sending host. This message contains the MTU of the link on which forwarding failed. The sending host then sets the path MTU for packets being send to the destination to the found MTU. The sending host then knows not to send packets greater than the MTU. 
 
 
-
-In IPv6, why do routers not fragment packets? Then how does IPv6 deal with the issue
-of Minimum Transmission Unit (MTU)?
-
-    <your answer>
-
-What is the difference between a web proxy and a vpn? When would it be advantageous
+> What is the difference between a web proxy and a vpn? When would it be advantageous 
 to use a proxy instead of a vpn?
 
-    <your answer>
+Both are used to conceal the user's identity.
+A web proxy is a computer that is the middle man between the user's computer and the internet. When web traffic is routed through the middle computer, it will seem to come from this computer rather than the user's computer. Proxy servers communicate with the internet using the HTTP or SOCKS protocol. 
+VPNs(virtual private networks) create an encrypted pathway between the user's computer and the host server. Anyone other than the VPN server cannot see any activity from the user's computer. They only know that the user has connected to the VPN server. 
+Web proxys don't have to use resources to encrypt traffic, so it can accept simultaneous connections from many more users. The HTTP protocol is only handling HTTP requests, so it is faster than VPN servers for HTTP requests. VPN, however, provides broader protection as it hides all internet access, not just web browsing and ISP throttling can be bypassed because ISPs cannot monitor activity. 
+It would be advantageous to use a proxy for fast web surfing anonymity. 
+
